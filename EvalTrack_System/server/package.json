@@ -1,0 +1,32 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@dotenvx/dotenvx-ops": "^0.37.4",
+    "axios": "^1.14.0",
+    "bcryptjs": "^3.0.2",
+    "body-parser": "^2.2.2",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "firebase-admin": "^13.2.0",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.20.0"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.12.5",
+    "@google-cloud/firestore": "^7.11.0",
+    "protobufjs": "^7.4.0"
+  }
+}
