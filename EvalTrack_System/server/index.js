@@ -19,7 +19,6 @@ try {
 }
 
 const fs = require('fs');
-const path = require('path');
 
 // Firebase Admin SDK - Made optional so server starts without it
 let firebaseAdmin, firebaseInitialized;
@@ -66,7 +65,10 @@ let isSQLite = false;
 // Initialize SQLite for production (Render) or MySQL for local development
 const initDatabase = () => {
     // Check if we should use SQLite (for Render deployment without external DB)
-    if (process.env.USE_SQLITE === 'true' || (!process.env.DB_HOST && process.env.NODE_ENV === 'production')) {
+    const useSQLite = process.env.USE_SQLITE?.toString().toLowerCase().trim();
+    const isProduction = process.env.NODE_ENV?.toString().toLowerCase().trim() === 'production';
+    
+    if (useSQLite === 'true' || (!process.env.DB_HOST && isProduction)) {
         console.log('Using SQLite database...');
         isSQLite = true;
         
