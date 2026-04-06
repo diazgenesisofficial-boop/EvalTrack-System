@@ -37,16 +37,25 @@ try {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Debug CORS config
+console.log('=== CORS CONFIGURATION ===');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('ALLOWED_ORIGINS:', process.env.ALLOWED_ORIGINS);
+
+const isProduction = process.env.NODE_ENV?.toString().toLowerCase().trim() === 'production';
+const allowedOrigins = isProduction 
+    ? (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : false)
+    : ['http://localhost:3000', 'http://localhost:3001', 'http://127.0.0.1:3000', 'http://127.0.0.1:3001', 'http://localhost', 'http://127.0.0.1'];
+
+console.log('isProduction:', isProduction);
+console.log('allowedOrigins:', allowedOrigins);
+console.log('==========================');
+
 app.use(cors({
-    // Production: Replace with your actual domain(s)
-    // origin: ['https://yourdomain.com', 'https://www.yourdomain.com'],
-    // Development: Allow localhost
-    origin: process.env.NODE_ENV === 'production' 
-        ? (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : false)
-        : ['http://localhost:3000', 'http://localhost:3001', 'http://127.0.0.1:3000', 'http://127.0.0.1:3001', 'http://localhost', 'http://127.0.0.1'],
+    origin: allowedOrigins,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id'],
-    credentials: true // Allow cookies if using session-based auth
+    credentials: true
 }));
 
 // COOP Headers for Firebase Auth popup/redirect support
