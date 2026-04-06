@@ -419,14 +419,13 @@ const addSQLiteCompatibility = () => {
             query: (sql, params = []) => {
                 return new Promise((resolve, reject) => {
                     try {
-                        // Convert MySQL-style ? placeholders to SQLite-style parameters
                         let sqliteSql = sql;
                         const paramCount = (sql.match(/\?/g) || []).length;
                         
+                        // Convert MySQL ? placeholders to SQLite numbered placeholders
                         if (paramCount > 0) {
-                            // Replace ? with numbered placeholders for SQLite
                             let paramIndex = 1;
-                            sqliteSql = sql.replace(/\?/g, () => `$${paramIndex++}`);
+                            sqliteSql = sql.replace(/\?/g, () => `?${paramIndex++}`);
                         }
                         
                         // Handle SELECT queries
@@ -434,10 +433,7 @@ const addSQLiteCompatibility = () => {
                             const stmt = db.prepare(sqliteSql);
                             let results;
                             if (params.length > 0) {
-                                // Convert array to object with numbered keys
-                                const paramObj = {};
-                                params.forEach((p, i) => paramObj[`$${i+1}`] = p);
-                                results = stmt.all(paramObj);
+                                results = stmt.all(...params);
                             } else {
                                 results = stmt.all();
                             }
@@ -447,9 +443,7 @@ const addSQLiteCompatibility = () => {
                             const stmt = db.prepare(sqliteSql);
                             let result;
                             if (params.length > 0) {
-                                const paramObj = {};
-                                params.forEach((p, i) => paramObj[`$${i+1}`] = p);
-                                result = stmt.run(paramObj);
+                                result = stmt.run(...params);
                             } else {
                                 result = stmt.run();
                             }
@@ -494,18 +488,17 @@ const addSQLiteCompatibility = () => {
             let sqliteSql = sql;
             const paramCount = (sql.match(/\?/g) || []).length;
             
+            // Convert MySQL ? placeholders to SQLite numbered placeholders
             if (paramCount > 0) {
                 let paramIndex = 1;
-                sqliteSql = sql.replace(/\?/g, () => `$${paramIndex++}`);
+                sqliteSql = sql.replace(/\?/g, () => `?${paramIndex++}`);
             }
             
             if (sqliteSql.trim().toLowerCase().startsWith('select')) {
                 const stmt = db.prepare(sqliteSql);
                 let results;
                 if (params.length > 0) {
-                    const paramObj = {};
-                    params.forEach((p, i) => paramObj[`$${i+1}`] = p);
-                    results = stmt.all(paramObj);
+                    results = stmt.all(...params);
                 } else {
                     results = stmt.all();
                 }
@@ -514,9 +507,7 @@ const addSQLiteCompatibility = () => {
                 const stmt = db.prepare(sqliteSql);
                 let result;
                 if (params.length > 0) {
-                    const paramObj = {};
-                    params.forEach((p, i) => paramObj[`$${i+1}`] = p);
-                    result = stmt.run(paramObj);
+                    result = stmt.run(...params);
                 } else {
                     result = stmt.run();
                 }
