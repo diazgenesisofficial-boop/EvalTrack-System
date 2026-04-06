@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const mysql = require('mysql2');
+const Database = require('better-sqlite3');
+const path = require('path');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const bcrypt = require('bcryptjs');
@@ -59,6 +61,407 @@ app.use(bodyParser.json());
 
 // Database connection
 let db;
+let isSQLite = false;
+
+// Initialize SQLite for production (Render) or MySQL for local development
+const initDatabase = () => {
+    // Check if we should use SQLite (for Render deployment without external DB)
+    if (process.env.USE_SQLITE === 'true' || (!process.env.DB_HOST && process.env.NODE_ENV === 'production')) {
+        console.log('Using SQLite database...');
+        isSQLite = true;
+        
+        const dbPath = process.env.SQLITE_PATH || './evaltrack.db';
+        db = new Database(dbPath);
+        
+        // Enable WAL mode for better concurrency
+        db.pragma('journal_mode = WAL');
+        
+        // Initialize SQLite tables
+        initSQLiteTables();
+        console.log('SQLite database initialized at:', dbPath);
+        return;
+    }
+    
+    // Otherwise use MySQL
+    connectWithRetry(process.env.DB_HOST || 'localhost');
+};
+
+const initSQLiteTables = () => {
+    const initQueries = [
+        `CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            role TEXT DEFAULT 'student',
+            program TEXT,
+            student_type TEXT,
+            year_level INTEGER DEFAULT 1,
+            status TEXT DEFAULT 'Active',
+            must_change_password INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS students (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            program_code TEXT,
+            student_type TEXT DEFAULT 'regular',
+            date_admitted DATETIME,
+            enrollment_status TEXT DEFAULT 'active',
+            year_level INTEGER DEFAULT 1,
+            gpa REAL DEFAULT 0.0,
+            total_units_earned REAL DEFAULT 0.0,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )`,
+        `CREATE TABLE IF NOT EXISTS ai_reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id TEXT NOT NULL,
+            report_text TEXT,
+            report_html TEXT,
+            metadata TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS ai_evaluation_reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id TEXT NOT NULL,
+            report_text TEXT,
+            metadata TEXT,
+            created_by TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS student_grades (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id TEXT NOT NULL,
+            course_code TEXT NOT NULL,
+            preliminary_grade REAL,
+            midterm_grade REAL,
+            final_grade REAL,
+            average_grade REAL,
+            grade_status TEXT DEFAULT 'Pending',
+            semester TEXT,
+            term TEXT,
+            remarks TEXT,
+            instructor_id TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(student_id, course_code, term)
+        )`,
+        `CREATE TABLE IF NOT EXISTS student_enrollments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id TEXT NOT NULL,
+            course_code TEXT NOT NULL,
+            term TEXT NOT NULL,
+            status TEXT DEFAULT 'Enrolled',
+            enrolled_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS enrollment_audit (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            course_code TEXT NOT NULL,
+            term TEXT NOT NULL,
+            performed_by TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS courses (
+            code TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            units REAL DEFAULT 3.0,
+            course_type TEXT,
+            prerequisites TEXT
+        )`,
+        `CREATE TABLE IF NOT EXISTS curriculum_courses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            course_code TEXT NOT NULL,
+            year_level INTEGER NOT NULL,
+            semester TEXT NOT NULL,
+            program TEXT DEFAULT 'BSIT',
+            curriculum_id INTEGER
+        )`,
+        `CREATE TABLE IF NOT EXISTS course_offerings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            course_code TEXT NOT NULL,
+            term TEXT NOT NULL,
+            instructor_id TEXT,
+            max_capacity INTEGER DEFAULT 30,
+            current_enrolled INTEGER DEFAULT 0,
+            is_active INTEGER DEFAULT 1
+        )`,
+        `CREATE TABLE IF NOT EXISTS programs (
+            code TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT
+        )`,
+        `CREATE TABLE IF NOT EXISTS curricula (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            program_code TEXT NOT NULL,
+            version TEXT,
+            is_active INTEGER DEFAULT 1,
+            effective_year INTEGER
+        )`
+    ];
+    
+    initQueries.forEach(q => {
+        try {
+            db.exec(q);
+        } catch (err) {
+            console.error('Error initializing SQLite table:', err.message);
+        }
+    });
+    
+    // Bootstrap curriculum data if empty
+    const courseCount = db.prepare('SELECT COUNT(*) as count FROM courses').get();
+    if (courseCount.count === 0) {
+        console.log('Bootstrapping BSIT curriculum data into SQLite...');
+        bootstrapSQLiteData();
+    }
+    
+    // Add SQLite compatibility methods
+    addSQLiteCompatibility();
+};
+
+const bootstrapSQLiteData = () => {
+    const insertCourse = db.prepare('INSERT OR IGNORE INTO courses (code, title, units, prerequisites) VALUES (?, ?, ?, ?)');
+    
+    const bsitCurriculum = [
+        // 1st Year - 1st Sem
+        ['GE 10', 'Environmental Science', 3.0, '-'],
+        ['GE 11', 'The Entrepreneurial Mind', 3.0, '-'],
+        ['GE 4', 'Readings in Philippine History', 3.0, '-'],
+        ['GE 5', 'The Contemporary World', 3.0, '-'],
+        ['GE 9', 'Life and Works of Rizal', 3.0, '-'],
+        ['IT 101', 'Introduction to Computing', 3.0, '-'],
+        ['IT 102', 'Computer Programming 1', 3.0, '-'],
+        ['NSTP 1', 'National Service Training Program I', 3.0, '-'],
+        ['PE 1', 'Physical Education 1', 2.0, '-'],
+        ['SF 1', 'Student Formation 1', 1.0, '-'],
+        // 1st Year - 2nd Sem
+        ['GE 1', 'Understanding the Self', 3.0, '-'],
+        ['GE 2', 'Mathematics in the Modern World', 3.0, '-'],
+        ['GE 3', 'Purposive Communication', 3.0, '-'],
+        ['IT 103', 'Computer Programming 2', 3.0, 'IT 102'],
+        ['IT 104', 'Introduction to Human Computer Interaction', 3.0, 'IT 101'],
+        ['IT 105', 'Discrete Mathematics 1', 3.0, 'IT 102'],
+        ['NSTP 2', 'National Service Training Program II', 3.0, 'NSTP 1'],
+        ['PE 2', 'Physical Education 2', 2.0, 'PE 1'],
+        ['SF 2', 'Student Formation 2', 1.0, 'SF 1'],
+        // 2nd Year - 1st Sem
+        ['GE 6', 'Art Appreciation', 3.0, '-'],
+        ['GE 7', 'Science, Technology and Society', 3.0, '-'],
+        ['GE 8', 'Ethics', 3.0, '-'],
+        ['IT 201', 'Data Structures and Algorithms', 3.0, 'IT 103'],
+        ['IT 202', 'Networking 1', 3.0, 'IT 101'],
+        ['IT Elect 1', 'Object-Oriented Programming', 3.0, 'IT 103'],
+        ['IT Elect 2', 'Platform Technologies', 3.0, 'IT 101'],
+        ['PE 3', 'Physical Education 3', 2.0, 'PE 2'],
+        ['SF 3', 'Student Formation 3', 1.0, 'SF 1'],
+        // 2nd Year - 2nd Sem
+        ['IT 203', 'Information Management', 3.0, '-'],
+        ['IT 204', 'Quantitative Methods (Modeling & Simulation)', 3.0, '-'],
+        ['IT 205', 'Integrative Programming & Technologies', 3.0, '-'],
+        ['IT 206', 'Networking 2', 3.0, 'IT 103'],
+        ['IT 207', 'Multimedia', 3.0, 'IT 101'],
+        ['IT Elect 3', 'Web Systems and Technologies 1', 3.0, 'IT 103'],
+        ['PE 4', 'Physical Education 4', 3.0, 'IT 101'],
+        ['SF 4', 'Student Formation 4', 1.0, '-'],
+        // 3rd Year - 1st Sem
+        ['GE 12', 'Reading Visual Art', 3.0, '-'],
+        ['IT 301', 'Advanced Database Systems', 3.0, 'IT 203'],
+        ['IT 302', 'System Integration and Architecture', 3.0, 'IT 203'],
+        ['IT 303', 'Event-Driven Programming', 3.0, 'IT 203'],
+        ['IT 304', 'Information Assurance and Security 1', 3.0, 'IT 205'],
+        ['IT 305', 'Mobile Application Development', 3.0, 'IT 206'],
+        ['IT 306', 'Game Development', 3.0, 'IT 205'],
+        ['IT 307', 'Web Systems and Technologies 2', 3.0, '-'],
+        ['SF 5', 'Student Formation 5', 1.0, 'SF 1'],
+        // 3rd Year - 2nd Sem
+        ['IT 308', 'Information Assurance and Security 2', 3.0, 'IT 304'],
+        ['IT 309', 'Application Development & Emerging Technologies', 3.0, 'IT 303'],
+        ['IT 310', 'Data Science and Analytics', 3.0, 'IT 301'],
+        ['IT 311', 'Technopreneurship', 3.0, '-'],
+        ['IT 312', 'Embedded Systems', 3.0, 'IT 303'],
+        ['IT Elect 4', 'System Integration and Architecture 2', 3.0, 'IT 302'],
+        ['SF 6', 'Student Formation 6', 1.0, 'SF 1'],
+        // Summer Term
+        ['CAP 101', 'Capstone Project & Research 1', 3.0, 'Third Year Standing'],
+        ['SP 101', 'Social and Professional Issues', 3.0, 'Third Year Standing'],
+        // 4th Year - 1st Sem
+        ['CAP 102', 'Capstone Project & Research 2', 3.0, 'CAP 101'],
+        ['IT 401', 'Systems Administration and Maintenance', 3.0, 'IT 308'],
+        ['SWT 101', 'ICT Seminar & Workshop', 3.0, '-'],
+        ['IT 402', 'IT Project Management', 3.0, 'IT 302'],
+        ['IT 403', 'Enterprise Architecture', 3.0, 'IT 302'],
+        // 4th Year - 2nd Sem
+        ['PRAC 101', 'Practicum (486 Hours)', 6.0, 'CAP 101, IT 308']
+    ];
+    
+    const insertMany = db.transaction((courses) => {
+        for (const course of courses) {
+            insertCourse.run(course);
+        }
+    });
+    
+    insertMany(bsitCurriculum);
+    console.log(`Bootstrapped ${bsitCurriculum.length} courses into SQLite`);
+    
+    // Bootstrap curriculum mapping
+    const insertMapping = db.prepare('INSERT OR IGNORE INTO curriculum_courses (course_code, year_level, semester, program) VALUES (?, ?, ?, ?)');
+    
+    const mapping = [
+        // 1st Year
+        ...['GE 10','GE 11','GE 4','GE 5','GE 9','IT 101','IT 102','NSTP 1','PE 1','SF 1'].map(c => [c, 1, '1st', 'BSIT']),
+        ...['GE 1','GE 2','GE 3','IT 103','IT 104','IT 105','NSTP 2','PE 2','SF 2'].map(c => [c, 1, '2nd', 'BSIT']),
+        // 2nd Year
+        ...['GE 6','GE 7','GE 8','IT 201','IT 202','IT Elect 1','IT Elect 2','PE 3','SF 3'].map(c => [c, 2, '1st', 'BSIT']),
+        ...['IT 203','IT 204','IT 205','IT 206','IT 207','IT Elect 3','PE 4','SF 4'].map(c => [c, 2, '2nd', 'BSIT']),
+        // 3rd Year
+        ...['GE 12','IT 301','IT 302','IT 303','IT 304','IT 305','IT 306','IT 307','SF 5'].map(c => [c, 3, '1st', 'BSIT']),
+        ...['IT 308','IT 309','IT 310','IT 311','IT 312','IT Elect 4','SF 6'].map(c => [c, 3, '2nd', 'BSIT']),
+        // Summer
+        ...['CAP 101','SP 101'].map(c => [c, 3, 'Summer', 'BSIT']),
+        // 4th Year
+        ...['CAP 102','IT 401','SWT 101','IT 402','IT 403'].map(c => [c, 4, '1st', 'BSIT']),
+        ...['PRAC 101'].map(c => [c, 4, '2nd', 'BSIT'])
+    ];
+    
+    const insertManyMappings = db.transaction((mappings) => {
+        for (const m of mappings) {
+            insertMapping.run(m);
+        }
+    });
+    
+    insertManyMappings(mapping);
+    console.log(`Bootstrapped ${mapping.length} curriculum mappings into SQLite`);
+    
+    // Insert default programs
+    const insertProgram = db.prepare('INSERT OR IGNORE INTO programs (code, name, description) VALUES (?, ?, ?)');
+    insertProgram.run('BSIT', 'Bachelor of Science in Information Technology', 'BSIT Program');
+    console.log('Bootstrapped programs into SQLite');
+};
+
+const addSQLiteCompatibility = () => {
+    // Add promise() method for SQLite to match MySQL API
+    db.promise = () => {
+        return {
+            query: (sql, params = []) => {
+                return new Promise((resolve, reject) => {
+                    try {
+                        // Convert MySQL-style ? placeholders to SQLite-style parameters
+                        let sqliteSql = sql;
+                        const paramCount = (sql.match(/\?/g) || []).length;
+                        
+                        if (paramCount > 0) {
+                            // Replace ? with numbered placeholders for SQLite
+                            let paramIndex = 1;
+                            sqliteSql = sql.replace(/\?/g, () => `$${paramIndex++}`);
+                        }
+                        
+                        // Handle SELECT queries
+                        if (sqliteSql.trim().toLowerCase().startsWith('select')) {
+                            const stmt = db.prepare(sqliteSql);
+                            let results;
+                            if (params.length > 0) {
+                                // Convert array to object with numbered keys
+                                const paramObj = {};
+                                params.forEach((p, i) => paramObj[`$${i+1}`] = p);
+                                results = stmt.all(paramObj);
+                            } else {
+                                results = stmt.all();
+                            }
+                            resolve([results]);
+                        } else {
+                            // For INSERT, UPDATE, DELETE
+                            const stmt = db.prepare(sqliteSql);
+                            let result;
+                            if (params.length > 0) {
+                                const paramObj = {};
+                                params.forEach((p, i) => paramObj[`$${i+1}`] = p);
+                                result = stmt.run(paramObj);
+                            } else {
+                                result = stmt.run();
+                            }
+                            resolve([result]);
+                        }
+                    } catch (err) {
+                        reject(err);
+                    }
+                });
+            },
+            getConnection: () => {
+                return new Promise((resolve) => {
+                    resolve({
+                        query: (sql, params) => db.promise().query(sql, params),
+                        release: () => {}
+                    });
+                });
+            },
+            beginTransaction: () => {
+                db.exec('BEGIN TRANSACTION');
+                return Promise.resolve();
+            },
+            commit: () => {
+                db.exec('COMMIT');
+                return Promise.resolve();
+            },
+            rollback: () => {
+                db.exec('ROLLBACK');
+                return Promise.resolve();
+            }
+        };
+    };
+    
+    // Add query method to match MySQL API
+    db.query = (sql, params, callback) => {
+        if (typeof params === 'function') {
+            callback = params;
+            params = [];
+        }
+        
+        try {
+            let sqliteSql = sql;
+            const paramCount = (sql.match(/\?/g) || []).length;
+            
+            if (paramCount > 0) {
+                let paramIndex = 1;
+                sqliteSql = sql.replace(/\?/g, () => `$${paramIndex++}`);
+            }
+            
+            if (sqliteSql.trim().toLowerCase().startsWith('select')) {
+                const stmt = db.prepare(sqliteSql);
+                let results;
+                if (params.length > 0) {
+                    const paramObj = {};
+                    params.forEach((p, i) => paramObj[`$${i+1}`] = p);
+                    results = stmt.all(paramObj);
+                } else {
+                    results = stmt.all();
+                }
+                callback(null, results);
+            } else {
+                const stmt = db.prepare(sqliteSql);
+                let result;
+                if (params.length > 0) {
+                    const paramObj = {};
+                    params.forEach((p, i) => paramObj[`$${i+1}`] = p);
+                    result = stmt.run(paramObj);
+                } else {
+                    result = stmt.run();
+                }
+                callback(null, result);
+            }
+        } catch (err) {
+            callback(err);
+        }
+    };
+    
+    // Add getConnection method
+    db.getConnection = (callback) => {
+        callback(null, {
+            query: db.query,
+            release: () => {}
+        });
+    };
+};
 
 const connectWithRetry = (host) => {
     const dbConfig = {
@@ -287,7 +690,7 @@ const connectWithRetry = (host) => {
     });
 };
 
-connectWithRetry(process.env.DB_HOST || 'localhost');
+initDatabase();
 
 // --- Load professional system prompt from promt.md (if available) ---
 const programHeadCurriculumSystemPrompt = (() => {

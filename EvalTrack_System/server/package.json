@@ -22,7 +22,8 @@
     "express": "^5.2.1",
     "firebase-admin": "^13.2.0",
     "jsonwebtoken": "^9.0.2",
-    "mysql2": "^3.20.0"
+    "mysql2": "^3.20.0",
+    "better-sqlite3": "^9.4.3"
   },
   "overrides": {
     "@grpc/grpc-js": "^1.12.5",
