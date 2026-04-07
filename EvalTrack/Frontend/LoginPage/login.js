@@ -171,8 +171,6 @@ async function signInWithGoogle() {
     const result = await firebase.auth().signInWithPopup(provider);
     const user = result.user;
 
-    console.log('[Google Sign In] User:', user);
-
     if (!user || !user.email) {
       throw new Error('Google account did not return an email address.');
     }
@@ -186,36 +184,70 @@ async function signInWithGoogle() {
     });
 
     const data = await response.json();
-    console.log('[Google Sign In] Backend response:', data);
 
     if (data.success) {
+      // Store in ALL storage variants so all pages can find it
       const userJSON = JSON.stringify(data.user);
       const token = data.token || '';
       
+      // Standardize on currentUser and authToken
       localStorage.setItem('currentUser', userJSON);
-      localStorage.setItem('authToken', token);
+      localStorage.setItem('user', userJSON);
       sessionStorage.setItem('currentUser', userJSON);
+      sessionStorage.setItem('user', userJSON);
+      
+      localStorage.setItem('authToken', token);
+      localStorage.setItem('token', token);
       sessionStorage.setItem('authToken', token);
+      sessionStorage.setItem('token', token);
 
       showToast('Login successful! Redirecting...', 'success');
       setTimeout(() => {
-        window.location.href = '../StudentPage/student.html';
+        const role = (data.user.role || '').toLowerCase().replace(/[\s\-_]/g, '');
+        if (role === 'admin' || role === 'dean') {
+          window.location.href = '../AdminPage/admin.html';
+        } else if (role === 'programhead' || role === 'instructor' || role === 'faculty') {
+          window.location.href = '../ProgramHeadPage/ProgramHead.html';
+        } else if (role === 'student') {
+          window.location.href = '../StudentPage/student.html';
+        } else {
+          window.location.href = '../LoginPage/login.html';
+        }
       }, 1000);
       return;
     }
 
     // User not found - redirect to registration
+    console.log('[Google Sign In] User not found in database, redirecting to registration');
     sessionStorage.setItem('tempGoogleUser', JSON.stringify({
       email: user.email,
       name: user.displayName || '',
       uid: user.uid,
       photoURL: user.photoURL || ''
     }));
-    showToast('New student! Please complete your profile.', 'info');
+    showToast('Google sign-in successful. Complete your student profile now.', 'info');
     window.location.href = '../RegisterPage/register.html';
   } catch (error) {
     console.error('[Google Sign In] Error:', error);
-    showError('student', 'Google Sign In failed: ' + error.message);
+    
+    // Handle specific Firebase errors
+    let errorMessage = 'Google Sign In failed. Please try again.';
+    
+    if (error.code === 'auth/popup-closed-by-user') {
+      errorMessage = 'Sign-in popup was closed. Please try again and keep the popup open until you complete the sign-in.';
+    } else if (error.code === 'auth/popup-blocked') {
+      errorMessage = 'Sign-in popup was blocked by browser. Please allow popups for this site (check the address bar for blocked popup icon). Then refresh and try again.';
+    } else if (error.code === 'auth/cancelled-popup-request') {
+      errorMessage = 'Multiple sign-in requests detected. Please wait a moment and try again.';
+    } else if (error.code === 'auth/account-exists-with-different-credential') {
+      errorMessage = 'An account with this email already exists with a different sign-in method.';
+    } else if (error.code === 'auth/unauthorized-domain') {
+      errorMessage = 'This domain is not authorized for Google Sign In. Please contact support.';
+    } else if (error.message) {
+      errorMessage = 'Google Sign In failed: ' + error.message;
+    }
+    
+    showError('student', errorMessage);
   }
 }
 
