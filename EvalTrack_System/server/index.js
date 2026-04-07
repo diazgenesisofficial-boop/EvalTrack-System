@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('@dotenvx/dotenvx').config();
 const express = require('express');
 const mysql = require('mysql2');
 const path = require('path');
