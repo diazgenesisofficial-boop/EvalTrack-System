@@ -191,6 +191,7 @@ const initSQLiteTables = () => {
             year_level INTEGER DEFAULT 1,
             status TEXT DEFAULT 'Active',
             must_change_password INTEGER DEFAULT 0,
+            last_seen DATETIME,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`,
         `CREATE TABLE IF NOT EXISTS students (
@@ -300,6 +301,19 @@ const initSQLiteTables = () => {
             console.error('Error initializing SQLite table:', err.message);
         }
     });
+    
+    // Migration: Add last_seen column if it doesn't exist (for existing databases)
+    try {
+        const tableInfo = db.prepare("PRAGMA table_info(users)").all();
+        const hasLastSeen = tableInfo.some(col => col.name === 'last_seen');
+        if (!hasLastSeen) {
+            console.log('Migration: Adding last_seen column to users table...');
+            db.exec('ALTER TABLE users ADD COLUMN last_seen DATETIME');
+            console.log('Migration: last_seen column added successfully');
+        }
+    } catch (err) {
+        console.error('Migration error:', err.message);
+    }
     
     // Bootstrap curriculum data if empty
     const courseCount = db.prepare('SELECT COUNT(*) as count FROM courses').get();
