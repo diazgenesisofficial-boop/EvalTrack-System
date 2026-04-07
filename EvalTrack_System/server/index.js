@@ -7,15 +7,64 @@ const bodyParser = require('body-parser');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-// Groq AI - Made optional so server starts without API keys
-let requestGroq;
-try {
-  const groqModule = require('./groq-rotator');
-  requestGroq = groqModule.requestGroq;
-} catch (error) {
-  console.log('Groq AI not available:', error.message);
-  requestGroq = null;
+// Groq AI - Loaded from environment variable
+const axios = require('axios');
+
+// GROQ API Keys - Read from environment variable (comma-separated)
+const GROQ_API_KEYS = (process.env.GROQ_API_KEYS || '').split(',').map(k => k.trim()).filter(Boolean);
+
+let groqLastIndex = 0;
+
+async function requestGroq(messages, options = {}) {
+  const model = options.model || 'llama3-8b-8192';
+  const timeout = options.timeout || 25000;
+  const maxRetries = options.maxRetriesPerKey || 2;
+
+  for (let i = 0; i < GROQ_API_KEYS.length; i++) {
+    const keyIdx = (groqLastIndex + i) % GROQ_API_KEYS.length;
+    const apiKey = GROQ_API_KEYS[keyIdx];
+
+    for (let retry = 0; retry < maxRetries; retry++) {
+      try {
+        const resp = await axios.post(
+          'https://api.groq.com/openai/v1/chat/completions',
+          {
+            model,
+            messages,
+            temperature: 0.7,
+            max_tokens: 2048
+          },
+          {
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json'
+            },
+            timeout
+          }
+        );
+
+        groqLastIndex = keyIdx;
+        const content = resp?.data?.choices?.[0]?.message?.content || '';
+        return { success: true, content, keyUsed: keyIdx };
+
+      } catch (err) {
+        const status = err?.response?.status;
+        const errorMsg = err?.response?.data?.error?.message || err.message;
+        console.error(`[GROQ] Key ${keyIdx} failed (retry ${retry}): ${status || 'network'} - ${errorMsg}`);
+
+        if (status === 429 || !status) {
+          await new Promise(r => setTimeout(r, 1000 * (retry + 1)));
+          continue;
+        }
+        break;
+      }
+    }
+  }
+
+  return { success: false, message: 'All API keys exhausted' };
 }
+
+console.log(`✓ Groq AI initialized with ${GROQ_API_KEYS.length} API keys`);
 
 const fs = require('fs');
 
