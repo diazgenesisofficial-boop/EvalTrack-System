@@ -2,7 +2,7 @@
 
 const APP_NAME = "EvalTrack";
 
-// --- PROSPECTUS DATA (OFFICIAL JMC BSIT CURRICULUM) ---
+br// --- PROSPECTUS DATA (OFFICIAL JMC BSIT CURRICULUM) ---
 // Ensure the global BSIT_PROSPECTUS exists and avoid redeclaring it if this script
 // is loaded multiple times or another bundle defines it.
 if (typeof window.BSIT_PROSPECTUS === 'undefined') {
@@ -179,7 +179,7 @@ async function login(email, password) {
         }
     } catch (err) {
         console.error("Login Error:", err);
-        return { success: false, message: 'Connection to server failed. Backend service may be temporarily unavailable.' };
+        return { success: false, message: 'Connection to server failed. Ensure EvalTrack_System Node.js server is running on port 5001.' };
     }
 }
 

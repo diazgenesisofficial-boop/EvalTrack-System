@@ -2104,7 +2104,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function syncStudentProfile(studentId, program, yearLevel, studentType) {
     try {
       const profileData = { program, year_level: yearLevel, student_type: studentType };
-      const profileRes = await authFetch(`http://localhost:5000/api/users/${studentId}/metadata`, {
+      const profileRes = await authFetch(`https://evaltrack-system.onrender.com/api/users/${studentId}/metadata`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(profileData)
@@ -2148,7 +2148,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         student_type: document.getElementById('manage-type').value
       };
       
-      const profileRes = await authFetch(`http://localhost:5000/api/users/${currentStudent.id}/metadata`, {
+      const profileRes = await authFetch(`https://evaltrack-system.onrender.com/api/users/${currentStudent.id}/metadata`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(profileData)
@@ -2257,7 +2257,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     btn.disabled = true;
     
     try {
-      const res = await authFetch('http://localhost:5000/api/ai/evaluate', {
+      const res = await authFetch('https://evaltrack-system.onrender.com/api/ai/evaluate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ studentId: window._gradingStudentId, grades: evals })
@@ -2327,7 +2327,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!hubFetched) {
       tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:rgba(255,255,255,.4);"><i class="fa fa-spinner fa-spin"></i> Fetching AI Evaluation Records...</td></tr>';
       try {
-        const r = await authFetch('http://localhost:5000/api/ai/reports');
+        const r = await authFetch('https://evaltrack-system.onrender.com/api/ai/reports');
         const data = await r.json();
         cachedEvals = data.success ? data.reports : [];
         hubFetched = true;
@@ -2379,7 +2379,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const list = document.getElementById('ai-recommendation-list');
     list.innerHTML = '<div class="hub-empty"><i class="fa fa-spinner fa-spin"></i><p>Fetching full AI evaluation report...</p></div>';
     try {
-      const r = await authFetch(`http://localhost:5000/api/ai/reports/${sid}`);
+      const r = await authFetch(`https://evaltrack-system.onrender.com/api/ai/reports/${sid}`);
       const d = await r.json();
       if (d.success && d.report) {
         const report = d.report;
@@ -2546,7 +2546,7 @@ let allStudentsCache = []; // Cache for students from backend
 async function loadStudentsFromBackend() {
   try {
     // Use authFetch to include authentication token
-    const r = await authFetch('http://localhost:5000/api/auth/users');
+    const r = await authFetch('https://evaltrack-system.onrender.com/api/auth/users');
     const result = await r.json();
     // Handle both array response and {success, data} format
     const users = Array.isArray(result) ? result : 
@@ -2639,7 +2639,7 @@ async function loadRecommendationContent(studentId) {
   
   try {
     // Use authFetch to include authentication token
-    const response = await authFetch(`http://localhost:5000/api/ai/reports/${studentId}`);
+    const response = await authFetch(`https://evaltrack-system.onrender.com/api/ai/reports/${studentId}`);
     const data = await response.json();
     
     if (data.success && data.report) {
@@ -2705,10 +2705,10 @@ async function loadGradeContent(studentId) {
   content.innerHTML = '<div style="padding:40px;text-align:center;"><i class="fa fa-spinner fa-spin"></i> Fetching AI Grade Report...</div>';
   
   try {
-    const reportRes = await authFetch(`http://localhost:5000/api/ai/reports/${studentId}`);
+    const reportRes = await authFetch(`https://evaltrack-system.onrender.com/api/ai/reports/${studentId}`);
     const reportData = await reportRes.json();
     
-    const gradesRes = await authFetch(`http://localhost:5000/api/evaluations`);
+    const gradesRes = await authFetch(`https://evaltrack-system.onrender.com/api/evaluations`);
     const allGrades = await gradesRes.json();
     const studentGrades = allGrades.filter(g => g.student_id === studentId);
     
@@ -2851,7 +2851,7 @@ function sendAIChatMessage() {
   chatMessages.scrollTop = chatMessages.scrollHeight;
 
   // Call real AI API with auth
-  authFetch('http://localhost:5000/api/ai/chat', {
+  authFetch('https://evaltrack-system.onrender.com/api/ai/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ 
@@ -2913,7 +2913,7 @@ function proceedToAIReports() {
 
 async function addAllRecommendationsToLoad(studentId) {
   try {
-    const response = await authFetch(`http://localhost:5000/api/ai/reports/${studentId}`);
+    const response = await authFetch(`https://evaltrack-system.onrender.com/api/ai/reports/${studentId}`);
     const data = await response.json();
     
     if (data.success && data.report && data.report.metadata.recommendations) {
@@ -3031,7 +3031,7 @@ async function searchEnrollmentStudents() {
   resultsEl.style.display = 'block';
   
   try {
-    const res = await authFetch(`http://localhost:5000/api/students/search?query=${encodeURIComponent(query)}`);
+    const res = await authFetch(`https://evaltrack-system.onrender.com/api/students/search?query=${encodeURIComponent(query)}`);
     const result = await res.json();
     
     let hits = result.success ? result.data : (Array.isArray(result) ? result : []);
@@ -3189,7 +3189,7 @@ async function saveEnrollment() {
   }
 
   try {
-    const res = await authFetch('http://localhost:5000/api/enrollment/add', {
+    const res = await authFetch('https://evaltrack-system.onrender.com/api/enrollment/add', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -3281,7 +3281,7 @@ async function selectEnrollmentStudent(studentId, studentName) {
 
 async function initializeIntelligentSubjectLoad(status) {
   try {
-    const response = await authFetch(`http://localhost:5000/api/enrollment/current/${status.studentId}`);
+    const response = await authFetch(`https://evaltrack-system.onrender.com/api/enrollment/current/${status.studentId}`);
     const enrolled = await response.json();
     
     // Check if response is array (success) or object with error
@@ -3320,7 +3320,7 @@ async function addSubjectToEnrollment() {
   }
   
   try {
-    const res = await authFetch('http://localhost:5000/api/enrollment/add', {
+    const res = await authFetch('https://evaltrack-system.onrender.com/api/enrollment/add', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -3364,7 +3364,7 @@ async function removeSubject(index) {
   if (!confirm(`Are you sure you want to drop ${subject.code}?`)) return;
 
   try {
-    const res = await authFetch('http://localhost:5000/api/enrollment/drop', {
+    const res = await authFetch('https://evaltrack-system.onrender.com/api/enrollment/drop', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -3399,7 +3399,7 @@ async function loadEnrollmentHistory(studentId = null) {
   if (!historyTable) return;
   
   try {
-    const url = studentId ? `http://localhost:5000/api/enrollment/history?student_id=${studentId}` : 'http://localhost:5000/api/enrollment/history';
+    const url = studentId ? `https://evaltrack-system.onrender.com/api/enrollment/history?student_id=${studentId}` : 'https://evaltrack-system.onrender.com/api/enrollment/history';
     const res = await authFetch(url);
     const history = await res.json();
     
@@ -3432,7 +3432,7 @@ async function loadEnrollmentGradeReports(studentId) {
   content.innerHTML = '<div style="padding:20px;text-align:center;"><i class="fa fa-spinner fa-spin"></i> Loading grades...</div>';
   
   try {
-    const res = await authFetch(`http://localhost:5000/api/evaluations`);
+    const res = await authFetch(`https://evaltrack-system.onrender.com/api/evaluations`);
     const all = await res.json();
     const grades = all.filter(g => g.student_id === studentId);
     
@@ -3473,11 +3473,11 @@ async function loadEnrollmentGradeReports(studentId) {
 async function detectStudentEnrollmentStatus(studentId) {
   try {
     // 1. Get student academic standing
-    const standingRes = await authFetch(`http://localhost:5000/api/standing/student/${studentId}`);
+    const standingRes = await authFetch(`https://evaltrack-system.onrender.com/api/standing/student/${studentId}`);
     const standing = await standingRes.json();
     
     // 2. Get enrollment forecast
-    const forecastRes = await authFetch(`http://localhost:5000/api/enrollment/forecast?student_id=${studentId}`);
+    const forecastRes = await authFetch(`https://evaltrack-system.onrender.com/api/enrollment/forecast?student_id=${studentId}`);
     const forecast = await forecastRes.json();
     
     // Normalize recommendations array
@@ -3693,7 +3693,7 @@ async function renderReportsHub() {
   
   try {
     // Use authFetch to include authentication token
-    const response = await authFetch('http://localhost:5000/api/evaluations');
+    const response = await authFetch('https://evaltrack-system.onrender.com/api/evaluations');
     const evaluations = await response.json();
     
     if (evaluations.length === 0) {
@@ -3757,7 +3757,7 @@ async function loadEnrollmentGradeReports(studentId) {
   
   try {
     // Use authFetch to include authentication token
-    const response = await authFetch('http://localhost:5000/api/evaluations');
+    const response = await authFetch('https://evaltrack-system.onrender.com/api/evaluations');
     const allEvaluations = await response.json();
     
     // Filter for this specific student
@@ -3828,7 +3828,7 @@ async function loadMonitoringStudents() {
   
   try {
     // Fetch real student standings from backend with authentication
-    const response = await authFetch('http://localhost:5000/api/standing/all');
+    const response = await authFetch('https://evaltrack-system.onrender.com/api/standing/all');
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -3941,7 +3941,7 @@ async function showStudentDetails(studentId) {
   // Fetch and update real-time data for details
   try {
     // 1. Fetch current enrollment with auth
-    const enrollRes = await authFetch(`http://localhost:5000/api/enrollment/current/${studentId}`);
+    const enrollRes = await authFetch(`https://evaltrack-system.onrender.com/api/enrollment/current/${studentId}`);
     const enrollment = await enrollRes.json();
     
     // Robust check for array response
@@ -3958,7 +3958,7 @@ async function showStudentDetails(studentId) {
     }
     
     // 2. Fetch academic history (grades) with auth
-    const gradesRes = await authFetch(`http://localhost:5000/api/evaluations`);
+    const gradesRes = await authFetch(`https://evaltrack-system.onrender.com/api/evaluations`);
     const allGrades = await gradesRes.json();
     
     if (Array.isArray(allGrades)) {
@@ -4000,7 +4000,7 @@ async function loadEnrollmentTimeline(studentId) {
   
   try {
     // Use authFetch to include authentication token
-    const res = await authFetch(`http://localhost:5000/api/enrollment/audit/${studentId}`);
+    const res = await authFetch(`https://evaltrack-system.onrender.com/api/enrollment/audit/${studentId}`);
     const audit = await res.json();
     
     if (audit.length === 0) {
@@ -4253,7 +4253,7 @@ function loadAllStudents() {
   container.innerHTML = '<div class="loading-state"><i class="fa fa-spinner fa-spin"></i><p>Loading student data...</p></div>';
   
   // Fetch real students from backend API with authentication
-  authFetch('http://localhost:5000/api/auth/users')
+  authFetch('https://evaltrack-system.onrender.com/api/auth/users')
     .then(r => r.json())
     .then(result => {
       const users = result.success ? result.data : (Array.isArray(result) ? result : []);
@@ -4377,7 +4377,7 @@ async function addSubjectToEnrollment() {
   }
   
   try {
-    const res = await authFetch('http://localhost:5000/api/enrollment/add', {
+    const res = await authFetch('https://evaltrack-system.onrender.com/api/enrollment/add', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

@@ -381,7 +381,7 @@ document.querySelectorAll('.nav-link[data-sec]').forEach(btn => {
 async function loadDashboardStats() {
   try {
     // Load users
-    const usersRes = await authFetch('http://localhost:5000/api/auth/users');
+    const usersRes = await authFetch('https://evaltrack-system.onrender.com/api/auth/users');
     const users = await usersRes.json();
     
     if (Array.isArray(users)) {
@@ -391,7 +391,7 @@ async function loadDashboardStats() {
     }
     
     // Load evaluations
-    const evalsRes = await authFetch('http://localhost:5000/api/evaluations');
+    const evalsRes = await authFetch('https://evaltrack-system.onrender.com/api/evaluations');
     const evaluations = await evalsRes.json();
     
     if (Array.isArray(evaluations)) {
