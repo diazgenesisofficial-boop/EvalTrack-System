@@ -3343,17 +3343,67 @@ function generateEvaluationReport(student, results, recommendations, gwa, standi
 }
 
 // --- STATIC FILES & SPA ROUTING ---
-// Serve static frontend files (must be after all API routes)
-app.use(express.static(path.join(__dirname, '..', '..', 'EvalTrack', 'Frontend')));
+// Determine frontend path - works both locally and on Render
+const frontendPath = process.env.FRONTEND_PATH || path.join(__dirname, '..', '..', 'EvalTrack', 'Frontend');
+console.log('Serving static files from:', frontendPath);
 
-// Handle SPA routing - serve index.html for all non-API, non-file routes
-app.get('*', (req, res) => {
-    // Don't interfere with API routes or file requests
-    if (req.path.startsWith('/api/') || req.path.match(/\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$/)) {
-        return res.status(404).send('Not found');
+// Serve static frontend files (must be after all API routes)
+app.use(express.static(frontendPath));
+
+// Handle subdirectory routes - serve actual HTML files if they exist
+app.get('/LoginPage/:file', (req, res) => {
+    const filePath = path.join(frontendPath, 'LoginPage', req.params.file);
+    if (fs.existsSync(filePath)) {
+        res.sendFile(filePath);
+    } else {
+        res.status(404).send('Not found');
     }
-    // Serve the frontend's index.html for all other routes (SPA behavior)
-    res.sendFile(path.join(__dirname, '..', '..', 'EvalTrack', 'Frontend', 'index.html'));
+});
+
+app.get('/AdminPage/:file', (req, res) => {
+    const filePath = path.join(frontendPath, 'AdminPage', req.params.file);
+    if (fs.existsSync(filePath)) {
+        res.sendFile(filePath);
+    } else {
+        res.status(404).send('Not found');
+    }
+});
+
+app.get('/ProgramHeadPage/:file', (req, res) => {
+    const filePath = path.join(frontendPath, 'ProgramHeadPage', req.params.file);
+    if (fs.existsSync(filePath)) {
+        res.sendFile(filePath);
+    } else {
+        res.status(404).send('Not found');
+    }
+});
+
+app.get('/StudentPage/:file', (req, res) => {
+    const filePath = path.join(frontendPath, 'StudentPage', req.params.file);
+    if (fs.existsSync(filePath)) {
+        res.sendFile(filePath);
+    } else {
+        res.status(404).send('Not found');
+    }
+});
+
+app.get('/RegisterPage/:file', (req, res) => {
+    const filePath = path.join(frontendPath, 'RegisterPage', req.params.file);
+    if (fs.existsSync(filePath)) {
+        res.sendFile(filePath);
+    } else {
+        res.status(404).send('Not found');
+    }
+});
+
+// Handle root SPA routing - serve index.html for root and unknown paths
+app.get('*', (req, res) => {
+    // Don't interfere with API routes
+    if (req.path.startsWith('/api/')) {
+        return res.status(404).json({ success: false, message: 'API endpoint not found' });
+    }
+    // Serve the frontend's index.html for root path
+    res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
 // --- START SERVER ---
