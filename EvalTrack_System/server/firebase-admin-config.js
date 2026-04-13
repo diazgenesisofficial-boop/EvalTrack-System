@@ -13,8 +13,7 @@ try {
   admin = require('firebase-admin');
   
   // Firebase service account configuration
-  // NOTE: You need to download your service account key from Firebase Console
-  // Project Settings > Service Accounts > Generate New Private Key
+  // Get this from: Firebase Console > Project Settings > Service Accounts > Generate New Private Key
   // Save it as firebase-service-account.json in this directory
   
   try {
@@ -24,8 +23,18 @@ try {
     // First, try to load from environment variable (for Render deployment)
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
       try {
-        serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-        console.log('Firebase Admin: Loaded from FIREBASE_SERVICE_ACCOUNT environment variable');
+        // Check if it's base64 encoded (long string without spaces)
+        const envValue = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
+        if (envValue.length > 100 && !envValue.includes(' ')) {
+          // Likely base64 encoded
+          const decoded = Buffer.from(envValue, 'base64').toString('utf8');
+          serviceAccount = JSON.parse(decoded);
+          console.log('Firebase Admin: Loaded from FIREBASE_SERVICE_ACCOUNT env var (base64 decoded)');
+        } else {
+          // Plain JSON
+          serviceAccount = JSON.parse(envValue);
+          console.log('Firebase Admin: Loaded from FIREBASE_SERVICE_ACCOUNT environment variable');
+        }
       } catch (envError) {
         console.log('Firebase Admin: Failed to parse FIREBASE_SERVICE_ACCOUNT env var:', envError.message);
       }
